@@ -19,9 +19,9 @@ import logging
 import random
 import numpy as np
 logger = logging.getLogger(__name__)
-# from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 
-# writer = SummaryWriter(log_dir='logs')
+writer = SummaryWriter(log_dir='tb_logs')
 
 
 def dev(args, model, metric, dev_loader, device):
@@ -376,8 +376,8 @@ def train(args, model, loss_fn, m_optim, m_scheduler, metric, train_loader, dev_
                     # if is_first_worker():
                     if args.local_rank in [-1,0]:
                         logger.info( "training gpu {}:,  global step: {}, local step: {}, loss: {}".format(args.local_rank,global_step+1, step+1, avg_loss/args.logging_step))
-                        # writer.add_scalar('avg_loss',avg_loss/args.logging_step, step)
-                        # writer.add_scalar('dev', mes, step)
+                        writer.add_scalar('avg_loss',avg_loss/args.logging_step, step)
+                        
                     avg_loss = 0.0 
 
                 if (global_step+1) % args.eval_every == 0 or (args.test_init_log and global_step==0):                
@@ -411,6 +411,7 @@ def train(args, model, loss_fn, m_optim, m_scheduler, metric, train_loader, dev_
                         else:
                             torch.save(model.state_dict(), args.save + "_step-{}".format(global_step+1))
                         logger.info( "global step: {}, messure: {}, best messure: {}".format(global_step+1, mes, best_mes))
+                        writer.add_scalar('dev', mes, step)
             # dist.barrier()  
 
 
