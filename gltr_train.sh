@@ -13,7 +13,7 @@ python train.py \
         -metric ndcg_cut_100 \
         -max_query_len 64 \
         -max_doc_len 445 \
-        -epoch 1 \
+        -epoch 2 \
         -optimizer adamw \
         -batch_size 4 \
         -lr 2e-5 \
