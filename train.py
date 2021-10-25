@@ -283,6 +283,11 @@ def train(args, model, loss_fn, m_optim, m_scheduler, metric, train_loader, dev_
                     with sync_context():
                         batch_score_pos, _ = model(train_batch['input_ids_pos'].to(device), train_batch['input_mask_pos'].to(device), train_batch['segment_ids_pos'].to(device))
                         batch_score_neg, _ = model(train_batch['input_ids_neg'].to(device), train_batch['input_mask_neg'].to(device), train_batch['segment_ids_neg'].to(device))
+                ###
+                elif args.task == 'global':
+                    with sync_context():
+                        batch_score, _ = model(train_batch['input_ids'].to(device), train_batch['input_mask'].to(device), train_batch['segment_ids'].to(device))
+                ###
                 elif args.task == 'classification':
                     with sync_context():
                         batch_score, _ = model(train_batch['input_ids'].to(device), train_batch['input_mask'].to(device), train_batch['segment_ids'].to(device))
@@ -341,6 +346,21 @@ def train(args, model, loss_fn, m_optim, m_scheduler, metric, train_loader, dev_
                         batch_loss = torch.mean(-1.0 * lsm[:, 0])
                     elif args.ranking_loss == 'LCE_loss':
                         pass
+            ###
+            elif args.task == 'global':
+                batch_size = len(batch_score)
+                sub_tensor = torch.zeros(batch_size, batch_size)
+                loss_tensor = torch.zeros(batch_size, batch_size)
+                for i in range(batch_size):
+                    for j in range(batch_size):
+                        if i <= j:
+                            sub_tensor[i,j] = batch_score[i] - batch_score[j]
+                            loss_tensor[i,j] = max(0,  1 - 1 * sub_tensor[i,j])
+                mask = ...
+                batch_loss = torch.mean(torch.triu(loss_tensor, diagonal = 1))
+                # print(batch_loss)
+                # break
+            ###
             elif args.task == 'classification':
                 with sync_context():
                     batch_loss = loss_fn(batch_score, train_batch['label'].to(device))
@@ -609,7 +629,7 @@ def main():
         train_loader = om.data.DataLoader(
             dataset=train_set,
             batch_size=args.batch_size,
-            shuffle=True,
+            shuffle=False, ## dj
             num_workers=8
         )
         dev_loader = om.data.DataLoader(
@@ -629,6 +649,14 @@ def main():
                 mode=args.mode,
                 task=args.task
             )
+        ###
+        elif args.task == 'global':
+            model = om.models.Bert(
+                pretrained=args.pretrain,
+                mode=args.mode,
+                task=args.task
+            )
+        ###
         else:
             model = om.models.Bert(
                 pretrained=args.pretrain,
@@ -737,9 +765,15 @@ def main():
             elif args.ranking_loss == 'LCE_loss':
                 print("LCE loss TODO")
                 # nn.CrossEntropyLoss()
+            else:
+                loss_fn = nn.BCELoss() # dummpy loss for occupation
 
         elif args.task == 'classification':
             loss_fn = nn.CrossEntropyLoss()
+        ###
+        elif args.task == 'global':
+            loss_fn = nn.BCELoss() # dummpy loss for occupation
+        ###
         else:
             raise ValueError('Task must be `ranking` or `classification`.')
 

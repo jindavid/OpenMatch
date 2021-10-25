@@ -22,6 +22,10 @@ class Bert(nn.Module):
 
         if self._task == 'ranking':
             self._dense = nn.Linear(self._config.hidden_size, 1)
+        ###
+        elif self._task == 'global':
+            self._dense = nn.Linear(self._config.hidden_size, 1) ### 1
+        ###
         elif self._task == 'classification':
             self._dense = nn.Linear(self._config.hidden_size, 2)
         else:
