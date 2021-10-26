@@ -15,16 +15,16 @@ class SelfAttentionLayer(nn.Module):
             # nn.Linear(nhid, 64), # H =64, 2F = nhid
             # nn.ReLU(True),
             # nn.Linear(64, 1)
-            nn.Linear(nhid, 1) # 1536 * 1
+            nn.Linear(nhid, 1) # 1536 x 1
         )
 
-    def forward(self, inputs, index, claims): # input: 8 * 768
+    def forward(self, inputs, index, claims): # input: 8 x 768
         tmp = None
         idx = torch.LongTensor([index]).cuda()
         own = torch.index_select(inputs, 0, idx) # 1 x 768
         own = own.repeat(self.nins, 1) # 8 x 768
         
-        tmp = torch.cat((own, inputs), 1) # 8 * 1536
+        tmp = torch.cat((own, inputs), 1) # 8 x 1536
         
         attention = self.project(tmp)
         
@@ -76,7 +76,7 @@ class BertGlobal(nn.Module):
         pretrained: str,
         mode: str = 'cls',
         task: str = 'ranking',
-        batch_size: int = 4
+        batch_size: int = 8
     ) -> None:
         super(BertGlobal, self).__init__()
         self._pretrained = pretrained
@@ -93,7 +93,7 @@ class BertGlobal(nn.Module):
             self._dense = nn.Linear(self._config.hidden_size, 1)
         ###
         elif self._task == 'global':
-            self._dense = nn.Linear(self._config.hidden_size, 1) ### 1
+            self._dense = nn.Linear(self._config.hidden_size, 1)
         ###
         elif self._task == 'classification':
             self._dense = nn.Linear(self._config.hidden_size, 2)
