@@ -348,18 +348,14 @@ def train(args, model, loss_fn, m_optim, m_scheduler, metric, train_loader, dev_
                         pass
             ###
             elif args.task == 'global':
-                batch_size = len(batch_score)
-                sub_tensor = torch.zeros(batch_size, batch_size)
-                loss_tensor = torch.zeros(batch_size, batch_size)
-                for i in range(batch_size):
-                    for j in range(batch_size):
-                        if i <= j:
-                            sub_tensor[i,j] = batch_score[i] - batch_score[j]
-                            loss_tensor[i,j] = max(0,  1 - 1 * sub_tensor[i,j])
-                mask = ...
-                batch_loss = torch.mean(torch.triu(loss_tensor, diagonal = 1))
-                # print(batch_loss)
-                # break
+                
+                mask = train_batch['label'].reshape(-1,1) - train_batch['label'].reshape(1,-1)
+                mask = mask.to(device)
+                diff_score = batch_score.reshape(-1,1) - batch_score.reshape(1,-1)
+                hinge_loss = loss_fn(diff_score, torch.zeros(diff_score.size()).to(device), mask)
+                # mask[mask<0] = 0
+                mask[mask>0] = 1
+                batch_loss = torch.mean(torch.mul(mask, hinge_loss).triu(diagonal=1))
             ###
             elif args.task == 'classification':
                 with sync_context():
@@ -651,10 +647,11 @@ def main():
             )
         ###
         elif args.task == 'global':
-            model = om.models.Bert(
+            model = om.models.BertGlobal(
                 pretrained=args.pretrain,
                 mode=args.mode,
-                task=args.task
+                task=args.task,
+                batch_size=args.batch_size
             )
         ###
         else:
@@ -772,7 +769,7 @@ def main():
             loss_fn = nn.CrossEntropyLoss()
         ###
         elif args.task == 'global':
-            loss_fn = nn.BCELoss() # dummpy loss for occupation
+            loss_fn = nn.MarginRankingLoss(margin=1, reduction='none')
         ###
         else:
             raise ValueError('Task must be `ranking` or `classification`.')

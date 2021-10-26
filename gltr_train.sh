@@ -1,8 +1,8 @@
-CUDA_VISIBLE_DEVICES=4,5,6,7 \
+CUDA_VISIBLE_DEVICES=4 \
 python train.py \
         -task global \
         -model bert \
-        -train queries=/data2/jindawei/data/msmarco-doctrain-queries.tsv,docs=/data2/jindawei/data/msmarco-docs-firstP_title.tsv,qrels=/data2/jindawei/data/msmarco/rerank_doc/msmarco-doctrain-qrels.tsv,trec=/data2/jindawei/data/bids_marco-doc_ance-firstp-10_global.tsv \
+        -train queries=/data2/jindawei/data/msmarco-doctrain-queries.tsv,docs=/data2/jindawei/data/msmarco-docs-firstP_title.tsv,qrels=/data2/jindawei/data/msmarco/rerank_doc/msmarco-doctrain-qrels.tsv,trec=/data2/jindawei/data/bids_marco-doc_ance-firstp-8_global.tsv \
         -max_input 40000000 \
         -save ./checkpoints/gltr_run \
         -dev /data2/liyz/OpenMatch_gitee/data/dev_valid_1200_subset_from-splitidx-0.top100.jsonl \
@@ -15,8 +15,9 @@ python train.py \
         -max_doc_len 445 \
         -epoch 1 \
         -optimizer adamw \
-        -batch_size 11 \
+        -batch_size 8 \
         -lr 2e-5 \
+        -gradient_accumulation_steps 1 \
         -n_warmup_steps 2000 \
-        -logging_step 100 \
+        -logging_step 10 \
         -eval_every 10000
