@@ -15,38 +15,21 @@ class SelfAttentionLayer(nn.Module):
             # nn.Linear(nhid, 64), # H =64, 2F = nhid
             # nn.ReLU(True),
             # nn.Linear(64, 1)
-            nn.Linear(nhid, 1)
+            nn.Linear(nhid, 1) # 1536 * 1
         )
 
-    def forward(self, inputs, index, claims): # input: other node
+    def forward(self, inputs, index, claims): # input: 8 * 768
         tmp = None
-        # if index > -1:
         idx = torch.LongTensor([index]).cuda()
-        # print(idx)
         own = torch.index_select(inputs, 0, idx) # 1 x 768
-        # print(own.size())
-        own = own.repeat(self.nins, 1) # 4 x 768
-        # print(own.size())
-        # print(own, inputs)
-        # print(inputs.size()) # 4 x 768
+        own = own.repeat(self.nins, 1) # 8 x 768
         
-        tmp = torch.cat((own, inputs), 1) # 4 * 1536
-        # print(tmp.size())
+        tmp = torch.cat((own, inputs), 1) # 8 * 1536
         
-        # else:
-        #     claims = claims.unsqueeze(1)
-        #     claims = claims.repeat(1, self.nins, 1)
-        #     tmp = torch.cat((claims, inputs), 2)
-        # # before
-        # print(self.nhid)
         attention = self.project(tmp)
-        # print(attention.size())
         
         weights = F.softmax(attention.squeeze(-1), dim=0)
-        # print(weights.size())
         outputs = (inputs * weights.unsqueeze(-1)).sum(dim=0)
-        # print(outputs.size())
-        # exit()
         
         return outputs
 
@@ -54,7 +37,7 @@ class AttentionLayer(nn.Module):
     def __init__(self, nins, nhid): # nin: node num
         super(AttentionLayer, self).__init__()
         self.nins = nins
-        self.attentions = [SelfAttentionLayer(nhid=nhid * 2, nins=nins) for _ in range(nins)] ### * 2
+        self.attentions = [SelfAttentionLayer(nhid=nhid * 2, nins=nins) for _ in range(nins)]
 
         for i, attention in enumerate(self.attentions):
             self.add_module('attention_{}'.format(i), attention)
@@ -128,9 +111,5 @@ class BertGlobal(nn.Module):
             raise ValueError('Mode must be `cls` or `pooling`.')
 
         logits = self._attentionlayer(logits) #########
-        # print(logits.size())
         score = self._dense(logits).squeeze(-1)
-        # print(score)
-        # exit()
-        # print(input_ids, logits, score) ###
         return score, logits

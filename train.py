@@ -353,9 +353,8 @@ def train(args, model, loss_fn, m_optim, m_scheduler, metric, train_loader, dev_
                 mask = mask.to(device)
                 diff_score = batch_score.reshape(-1,1) - batch_score.reshape(1,-1)
                 hinge_loss = loss_fn(diff_score, torch.zeros(diff_score.size()).to(device), mask)
-                # mask[mask<0] = 0
-                mask[mask>0] = 1
-                batch_loss = torch.mean(torch.mul(mask, hinge_loss).triu(diagonal=1))
+                mask[mask!=0] = 1
+                batch_loss = torch.mean(torch.mul(mask, hinge_loss).triu(diagonal = 1))
             ###
             elif args.task == 'classification':
                 with sync_context():
