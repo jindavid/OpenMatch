@@ -43,7 +43,7 @@ class BertDataset(Dataset):
                             query, doc_pos, doc_neg = line.strip('\n').split('\t')
                             line = {'query': query, 'doc_pos': doc_pos, 'doc_neg': doc_neg}
                         ####
-                        elif self._task == 'global':
+                        elif self._task == 'global' or self._task == 'global_no_att':
                             query, doc, label = line.strip('\n').split('\t')
                             line = {'query': query, 'doc': doc, 'label': int(label)}
                         ####
@@ -96,7 +96,7 @@ class BertDataset(Dataset):
                         if self._task == 'ranking':
                             self._examples.append({'query_id': line[0], 'doc_pos_id': line[1], 'doc_neg_id': line[2]})
                         ###
-                        elif self._task == 'global':
+                        elif self._task == 'global' or self._task == 'global_no_att':
                             self._examples.append({'query_id': line[0], 'doc_id': line[1], 'label': int(line[2])})
                         ###
                         elif self._task == 'classification':
@@ -125,7 +125,7 @@ class BertDataset(Dataset):
                 return {'input_ids_pos': input_ids_pos, 'segment_ids_pos': segment_ids_pos, 'input_mask_pos': input_mask_pos,
                         'input_ids_neg': input_ids_neg, 'segment_ids_neg': segment_ids_neg, 'input_mask_neg': input_mask_neg}
             ###
-            elif self._task == 'global':
+            elif self._task == 'global' or self._task == 'global_no_att':
                 input_ids = torch.tensor([item['input_ids'] for item in batch])
                 segment_ids = torch.tensor([item['segment_ids'] for item in batch])
                 input_mask = torch.tensor([item['input_mask'] for item in batch])
@@ -199,7 +199,7 @@ class BertDataset(Dataset):
                 return {'input_ids_pos': input_ids_pos, 'segment_ids_pos': segment_ids_pos, 'input_mask_pos': input_mask_pos,
                         'input_ids_neg': input_ids_neg, 'segment_ids_neg': segment_ids_neg, 'input_mask_neg': input_mask_neg}
             ###
-            elif self._task == 'global':
+            elif self._task == 'global' or self._task == 'global_no_att':
                 query_tokens = self._tokenizer.tokenize(example['query'])[:self._query_max_len]
                 doc_tokens = self._tokenizer.tokenize(example['doc'])[:self._seq_max_len-len(query_tokens)-3]
                 

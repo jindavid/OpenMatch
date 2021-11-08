@@ -21,7 +21,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 from torch.utils.tensorboard import SummaryWriter
 
-writer = SummaryWriter(log_dir='tb_logs')
+writer = SummaryWriter(log_dir='tb_logs/rank')
 
 
 def dev(args, model, metric, dev_loader, device):
@@ -50,12 +50,12 @@ def dev(args, model, metric, dev_loader, device):
                     rst_dict[q_id] = {}
                 if d_id not in rst_dict[q_id] or b_s > rst_dict[q_id][d_id][0]:
                     rst_dict[q_id][d_id] = [b_s, l]
-    return rst_dict
+    return rst_dict, batch_score
 
 def train_reinfoselect(args, model, policy, loss_fn, m_optim, m_scheduler, p_optim, metric, train_loader, dev_loader, device):
     best_mes = 0.0
     with torch.no_grad():
-        rst_dict = dev(args, model, metric, dev_loader, device)
+        rst_dict, _ = dev(args, model, metric, dev_loader, device)
         om.utils.save_trec(args.res, rst_dict)
         if args.metric.split('_')[0] == 'mrr':
             mes = metric.get_mrr(args.qrels, args.res, args.metric)
@@ -114,7 +114,7 @@ def train_reinfoselect(args, model, policy, loss_fn, m_optim, m_scheduler, p_opt
                 #m_scheduler.step()
                 if (step+1) % args.eval_every == 0 and len(log_prob_ps) > 0:
                     with torch.no_grad():
-                        rst_dict = dev(args, model, metric, dev_loader, device)
+                        rst_dict, _ = dev(args, model, metric, dev_loader, device)
                         om.utils.save_trec(args.res, rst_dict)
                         if args.metric.split('_')[0] == 'mrr':
                             mes = metric.get_mrr(args.qrels, args.res, args.metric)
@@ -230,7 +230,7 @@ def train_reinfoselect(args, model, policy, loss_fn, m_optim, m_scheduler, p_opt
 
             if (step+1) % args.eval_every == 0:
                 with torch.no_grad():
-                    rst_dict = dev(args, model, metric, dev_loader, device)
+                    rst_dict, _ = dev(args, model, metric, dev_loader, device)
                     om.utils.save_trec(args.res, rst_dict)
                     if args.metric.split('_')[0] == 'mrr':
                         mes = metric.get_mrr(args.qrels, args.res, args.metric)
@@ -284,9 +284,9 @@ def train(args, model, loss_fn, m_optim, m_scheduler, metric, train_loader, dev_
                         batch_score_pos, _ = model(train_batch['input_ids_pos'].to(device), train_batch['input_mask_pos'].to(device), train_batch['segment_ids_pos'].to(device))
                         batch_score_neg, _ = model(train_batch['input_ids_neg'].to(device), train_batch['input_mask_neg'].to(device), train_batch['segment_ids_neg'].to(device))
                 ###
-                elif args.task == 'global':
+                elif args.task == 'global' or args.task == 'global_no_att':
                     with sync_context():
-                        batch_score, _ = model(train_batch['input_ids'].to(device), train_batch['input_mask'].to(device), train_batch['segment_ids'].to(device))
+                        batch_score, logits = model(train_batch['input_ids'].to(device), train_batch['input_mask'].to(device), train_batch['segment_ids'].to(device))
                 ###
                 elif args.task == 'classification':
                     with sync_context():
@@ -347,14 +347,19 @@ def train(args, model, loss_fn, m_optim, m_scheduler, metric, train_loader, dev_
                     elif args.ranking_loss == 'LCE_loss':
                         pass
             ###
-            elif args.task == 'global':
-                
-                mask = train_batch['label'].reshape(-1,1) - train_batch['label'].reshape(1,-1)
-                mask = mask.to(device)
-                diff_score = batch_score.reshape(-1,1) - batch_score.reshape(1,-1)
-                hinge_loss = loss_fn(diff_score, torch.zeros(diff_score.size()).to(device), mask)
-                mask[mask!=0] = 1
-                batch_loss = torch.mean(torch.mul(mask, hinge_loss).triu(diagonal = 1))
+            elif args.task == 'global' or args.task == 'global_no_att':
+
+                # mask = train_batch['label'].reshape(-1,1) - train_batch['label'].reshape(1,-1)
+                # mask = mask.to(device)
+                batch_score = batch_score.tanh()
+                label_tensor = train_batch['label'].repeat(len(batch_score), 1)
+                label_tensor = label_tensor.to(device)
+                mask = label_tensor - label_tensor.t()
+                score_tensor = batch_score.repeat(len(batch_score), 1)
+                hinge_loss = loss_fn(score_tensor, score_tensor.t(), torch.ones(score_tensor.size()).to(device))
+                # diff_score = batch_score.reshape(-1,1).tanh() - batch_score.reshape(1,-1).tanh()
+                # hinge_loss = loss_fn(diff_score, torch.zeros(diff_score.size()).to(device), torch.ones(diff_score.size()).to(device))
+                batch_loss = torch.mean(hinge_loss[mask > 0])
             ###
             elif args.task == 'classification':
                 with sync_context():
@@ -393,12 +398,12 @@ def train(args, model, loss_fn, m_optim, m_scheduler, metric, train_loader, dev_
                         logger.info( "training gpu {}:,  global step: {}, local step: {}, loss: {}".format(args.local_rank,global_step+1, step+1, avg_loss/args.logging_step))
                         writer.add_scalar('avg_loss',avg_loss/args.logging_step, step)
                         
-                    avg_loss = 0.0 
+                    avg_loss = 0.0
 
                 if (global_step+1) % args.eval_every == 0 or (args.test_init_log and global_step==0):                
                     model.eval()
                     with torch.no_grad():
-                        rst_dict = dev(args, model, metric, dev_loader, device)
+                        rst_dict, batch_score_dev = dev(args, model, metric, dev_loader, device)
                     model.train()
 
                     if args.local_rank != -1:
@@ -427,10 +432,13 @@ def train(args, model, loss_fn, m_optim, m_scheduler, metric, train_loader, dev_
                             torch.save(model.state_dict(), args.save + "_step-{}".format(global_step+1))
                         logger.info( "global step: {}, messure: {}, best messure: {}".format(global_step+1, mes, best_mes))
                         writer.add_scalar('dev', mes, step)
+
+                        # writer.add_scalar('dev_loss', mes, step)
             # dist.barrier()  
 
 
 def main():
+
     parser = argparse.ArgumentParser()
     parser.add_argument('-task', type=str, default='ranking')
     parser.add_argument('-ranking_loss', type=str, default='margin_loss')
@@ -609,16 +617,27 @@ def main():
             num_workers=1,
             sampler=train_sampler
         )
-        #dev_sampler = DistributedSampler(dev_set)
-        dev_sampler = DistributedEvalSampler(dev_set)
-        dev_loader = om.data.DataLoader(
-            dataset=dev_set,
-            batch_size=args.batch_size * 16 if args.dev_eval_batch_size <= 0 else args.dev_eval_batch_size,
-            shuffle=False,
-            num_workers=1,
-            sampler=dev_sampler
-        )
-        dist.barrier()
+        if args.task == 'global' or args.task == 'global_no_att':
+            dev_sampler = DistributedEvalSampler(dev_set)
+            dev_loader = om.data.DataLoader(
+                dataset=dev_set,
+                batch_size=args.batch_size,
+                shuffle=False,
+                num_workers=1,
+                sampler=dev_sampler
+            )
+            dist.barrier()
+        else:
+            #dev_sampler = DistributedSampler(dev_set)
+            dev_sampler = DistributedEvalSampler(dev_set)
+            dev_loader = om.data.DataLoader(
+                dataset=dev_set,
+                batch_size=args.batch_size * 16 if args.dev_eval_batch_size <= 0 else args.dev_eval_batch_size,
+                shuffle=False,
+                num_workers=1,
+                sampler=dev_sampler
+            )
+            dist.barrier()
 
     else:
         train_loader = om.data.DataLoader(
@@ -627,13 +646,23 @@ def main():
             shuffle=False, ## dj
             num_workers=8
         )
-        dev_loader = om.data.DataLoader(
-            dataset=dev_set,
-            batch_size=args.batch_size * 16,
-            shuffle=False,
-            num_workers=8
-        )
-        train_sampler = None
+        if args.task == 'global' or args.task == 'global_no_att':
+            dev_loader = om.data.DataLoader(
+                dataset=dev_set,
+                batch_size=args.batch_size,
+                shuffle=False,
+                num_workers=8
+            )
+            train_sampler = None
+        else:
+            dev_loader = om.data.DataLoader(
+                dataset=dev_set,
+                batch_size=args.batch_size * 16,
+                shuffle=False,
+                num_workers=8
+            )
+            train_sampler = None
+            
 
     if args.model == 'bert' or args.model == 'roberta':
         if args.maxp:
@@ -646,7 +675,7 @@ def main():
             )
         ###
         elif args.task == 'global':
-            model = om.models.BertGlobal(
+            model = om.models.BertGlobal2(
                 pretrained=args.pretrain,
                 mode=args.mode,
                 task=args.task,
@@ -767,7 +796,7 @@ def main():
         elif args.task == 'classification':
             loss_fn = nn.CrossEntropyLoss()
         ###
-        elif args.task == 'global':
+        elif args.task == 'global' or args.task == 'global_no_att':
             loss_fn = nn.MarginRankingLoss(margin=1, reduction='none')
         ###
         else:
@@ -780,6 +809,7 @@ def main():
     loss_fn.to(device)
     if args.n_gpu > 1:
         model = nn.DataParallel(model)
+        dev_model = nn.DataParallel(dev_model)
         loss_fn = nn.DataParallel(loss_fn)
 
     if args.local_rank != -1:

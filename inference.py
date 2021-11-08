@@ -140,6 +140,15 @@ def main():
                 mode=args.mode,
                 task=args.task
             )
+        ###
+        elif args.task == 'global':
+            model = om.models.BertGlobal2(
+                pretrained=args.pretrain,
+                mode=args.mode,
+                task=args.task,
+                batch_size=args.batch_size
+            )
+        ###
         else:
             model = om.models.Bert(
                 pretrained=args.pretrain,
@@ -184,7 +193,7 @@ def main():
             task=args.task
         )
     elif args.model == 'knrm':
-        model = on.models.KNRM(
+        model = om.models.KNRM(
             vocab_size=tokenizer.get_vocab_size(),
             embed_dim=tokenizer.get_embed_dim(),
             kernel_num=args.n_kernels,
