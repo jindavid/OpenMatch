@@ -1,7 +1,7 @@
 from typing import List, Tuple, Dict, Any
 
 import json
-
+import numpy as np
 import torch
 from torch.utils.data import Dataset
 
@@ -39,17 +39,18 @@ class BertDataset(Dataset):
                     if self._mode != 'train' or self._dataset.split('.')[-1] == 'json' or self._dataset.split('.')[-1] == 'jsonl':
                         line = json.loads(line)
                     else:
-                        if self._task == 'ranking':
-                            query, doc_pos, doc_neg = line.strip('\n').split('\t')
-                            line = {'query': query, 'doc_pos': doc_pos, 'doc_neg': doc_neg}
                         ####
-                        elif self._task == 'global' or self._task == 'global_no_att':
+                        if self._task == 'global' or self._task == 'global_no_att':
                             query, doc, label = line.strip('\n').split('\t')
                             line = {'query': query, 'doc': doc, 'label': int(label)}
                         ####
-                        elif self._task == 'classification':
-                            query, doc, label = line.strip('\n').split('\t')
-                            line = {'query': query, 'doc': doc, 'label': int(label)}
+                        ####
+                        elif self._task == 'global_cat':
+                            lines = line.strip('\n').split('\t')
+                            query = lines[0]
+                            for j in lines[1:]:
+                                print('1')
+                        ####
                         else:
                             raise ValueError('Task must be `ranking` or `classification`.')
                     self._examples.append(line)
@@ -93,14 +94,14 @@ class BertDataset(Dataset):
                         else:
                             label = qrels[line[0]][line[2]]
                     if self._mode == 'train':
-                        if self._task == 'ranking':
-                            self._examples.append({'query_id': line[0], 'doc_pos_id': line[1], 'doc_neg_id': line[2]})
                         ###
-                        elif self._task == 'global' or self._task == 'global_no_att':
+                        if self._task == 'global' or self._task == 'global_no_att':
                             self._examples.append({'query_id': line[0], 'doc_id': line[1], 'label': int(line[2])})
                         ###
-                        elif self._task == 'classification':
-                            self._examples.append({'query_id': line[0], 'doc_id': line[1], 'label': int(line[2])})
+                        ###
+                        elif self._task == 'global_cat':
+                            print('1')
+                        ###
                         else:
                             raise ValueError('Task must be `ranking` or `classification`.')
                     elif self._mode == 'dev':
@@ -115,29 +116,26 @@ class BertDataset(Dataset):
 
     def collate(self, batch: Dict[str, Any]):
         if self._mode == 'train':
-            if self._task == 'ranking':
-                input_ids_pos = torch.tensor([item['input_ids_pos'] for item in batch])
-                segment_ids_pos = torch.tensor([item['segment_ids_pos'] for item in batch])
-                input_mask_pos = torch.tensor([item['input_mask_pos'] for item in batch])
-                input_ids_neg = torch.tensor([item['input_ids_neg'] for item in batch])
-                segment_ids_neg = torch.tensor([item['segment_ids_neg'] for item in batch])
-                input_mask_neg = torch.tensor([item['input_mask_neg'] for item in batch])
-                return {'input_ids_pos': input_ids_pos, 'segment_ids_pos': segment_ids_pos, 'input_mask_pos': input_mask_pos,
-                        'input_ids_neg': input_ids_neg, 'segment_ids_neg': segment_ids_neg, 'input_mask_neg': input_mask_neg}
             ###
-            elif self._task == 'global' or self._task == 'global_no_att':
+            if self._task == 'global' or self._task == 'global_no_att':
                 input_ids = torch.tensor([item['input_ids'] for item in batch])
                 segment_ids = torch.tensor([item['segment_ids'] for item in batch])
                 input_mask = torch.tensor([item['input_mask'] for item in batch])
                 label = torch.tensor([item['label'] for item in batch])
                 return {'input_ids': input_ids, 'segment_ids': segment_ids, 'input_mask': input_mask, 'label': label}
             ###
-            elif self._task == 'classification':
+            ###
+            elif self._task == 'global_cat':
+                # input_ids = torch.tensor([item['input_ids'] for item in batch])
+                # segment_ids = torch.tensor([item['segment_ids'] for item in batch])
+                # input_mask = torch.tensor([item['input_mask'] for item in batch])
+                # label = torch.tensor([item['label'] for item in batch])
                 input_ids = torch.tensor([item['input_ids'] for item in batch])
                 segment_ids = torch.tensor([item['segment_ids'] for item in batch])
                 input_mask = torch.tensor([item['input_mask'] for item in batch])
                 label = torch.tensor([item['label'] for item in batch])
-                return {'input_ids': input_ids, 'segment_ids': segment_ids, 'input_mask': input_mask, 'label': label}
+                return {'input_ids': input_ids, 'segment_ids': segment_ids, 'input_mask': input_mask, 'label': label} 
+            ###
             else:
                 raise ValueError('Task must be `ranking` or `classification`.')
         elif self._mode == 'dev':
@@ -189,29 +187,46 @@ class BertDataset(Dataset):
             else:
                 example['doc'] = self._docs[example['doc_id']]
         if self._mode == 'train':
-            if self._task == 'ranking':
+            ###
+            if self._task == 'global' or self._task == 'global_no_att':
                 query_tokens = self._tokenizer.tokenize(example['query'])[:self._query_max_len]
-                doc_tokens_pos = self._tokenizer.tokenize(example['doc_pos'])[:self._seq_max_len-len(query_tokens)-3]
-                doc_tokens_neg = self._tokenizer.tokenize(example['doc_neg'])[:self._seq_max_len-len(query_tokens)-3]
+                doc_tokens = self._tokenizer.tokenize(example['doc'])[:self._seq_max_len-len(query_tokens)-3]
+                
+                input_ids, input_mask, segment_ids = self.pack_bert_features(query_tokens, doc_tokens)
+                return {'input_ids': input_ids, 'segment_ids': segment_ids, 'input_mask': input_mask, 'label': example['label']}
+            ###
+            ###
+            elif self._task == 'global_cat':
+                query_tokens = self._tokenizer.tokenize(example['query'])[:self._query_max_len]
 
-                input_ids_pos, input_mask_pos, segment_ids_pos = self.pack_bert_features(query_tokens, doc_tokens_pos)
-                input_ids_neg, input_mask_neg, segment_ids_neg = self.pack_bert_features(query_tokens, doc_tokens_neg)
-                return {'input_ids_pos': input_ids_pos, 'segment_ids_pos': segment_ids_pos, 'input_mask_pos': input_mask_pos,
-                        'input_ids_neg': input_ids_neg, 'segment_ids_neg': segment_ids_neg, 'input_mask_neg': input_mask_neg}
-            ###
-            elif self._task == 'global' or self._task == 'global_no_att':
-                query_tokens = self._tokenizer.tokenize(example['query'])[:self._query_max_len]
-                doc_tokens = self._tokenizer.tokenize(example['doc'])[:self._seq_max_len-len(query_tokens)-3]
+                input_ids_list = []
+                input_mask_list = []
+                segment_ids_list = []
+                label_list = []
+
+                for i, line in enumerate(example['document']):
+                    doc_tokens = self._tokenizer.tokenize(line['doc'])[:self._seq_max_len-len(query_tokens)-3]
                 
-                input_ids, input_mask, segment_ids = self.pack_bert_features(query_tokens, doc_tokens)
-                return {'input_ids': input_ids, 'segment_ids': segment_ids, 'input_mask': input_mask, 'label': example['label']}
+                    input_ids, input_mask, segment_ids = self.pack_bert_features(query_tokens, doc_tokens)
+
+                    input_ids_list.append(input_ids)
+                    input_mask_list.append(input_mask)
+                    segment_ids_list.append(segment_ids)
+                    label_list.append(line['label'])
+
+                # print(np.shape(input_ids_list))
+                # print(np.shape(input_mask_list))
+                # print(np.shape(segment_ids_list))
+                # input_ids = torch.cat(input_ids_list, dim=1)
+                # print(np.shape(label_list))
+                # print(label_list[0] == 1)
+
+                # input_mask = torch.cat(input_mask_list)
+                # segment_ids = torch.cat(segment_ids_list)
+                # label = torch.cat(label_list)
+
+                return {'input_ids': input_ids_list, 'segment_ids': segment_ids_list, 'input_mask': input_mask_list, 'label': label_list}
             ###
-            elif self._task == 'classification':
-                query_tokens = self._tokenizer.tokenize(example['query'])[:self._query_max_len]
-                doc_tokens = self._tokenizer.tokenize(example['doc'])[:self._seq_max_len-len(query_tokens)-3]
-                
-                input_ids, input_mask, segment_ids = self.pack_bert_features(query_tokens, doc_tokens)
-                return {'input_ids': input_ids, 'segment_ids': segment_ids, 'input_mask': input_mask, 'label': example['label']}
             else:
                 raise ValueError('Task must be `ranking` or `classification`.')
         elif self._mode == 'dev':

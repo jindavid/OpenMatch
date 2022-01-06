@@ -1,21 +1,21 @@
-CUDA_VISIBLE_DEVICES=1 \
+CUDA_VISIBLE_DEVICES=0 \
 python train.py \
-        -task ranking -ranking_loss triplet_loss \
+        -task global_cat \
         -model bert \
-        -train queries=/data2/jindawei/data/msmarco-doctrain-queries.tsv,docs=/data2/jindawei/data/msmarco-docs-firstP_title.tsv,qrels=/data2/jindawei/data/msmarco/rerank_doc/msmarco-doctrain-qrels.tsv,trec=/data2/jindawei/data/bids_marco-doc_ance-firstp-9_rank.tsv \
+        -train /data2/jindawei/data/msmarco_train_global_cat_top98_ANCE+BM25.json \
         -max_input 40000000 \
-        -save ./checkpoints/gltr_rank_om_triplet \
+        -save ./checkpoints/gltr_global_yes_CE \
         -dev /data2/jindawei/data/dev_valid_1200_subset_from-splitidx-0.top100.jsonl \
         -qrels /data2/jindawei/data/msmarco-docdev-qrels.tsv \
         -vocab bert-base-uncased \
         -pretrain bert-base-uncased \
-        -res ./results/gltr_rank_om_triplet.trec \
+        -res ./results/gltr_global_yes_CE.trec \
         -metric mrr_cut_100 \
         -max_query_len 64 \
         -max_doc_len 445 \
         -epoch 1 \
         -optimizer adamw \
-        -batch_size 4 \
+        -batch_size 1 \
         -lr 2e-5 \
         -gradient_accumulation_steps 4 \
         -n_warmup_steps 2000 \

@@ -1,15 +1,15 @@
-CUDA_VISIBLE_DEVICES=5 \
+CUDA_VISIBLE_DEVICES=2 \
 python train.py \
-        -task global_no_att \
+        -task global_no_att -global_loss CE_loss \
         -model bert \
         -train queries=/data2/jindawei/data/msmarco-doctrain-queries.tsv,docs=/data2/jindawei/data/msmarco-docs-firstP_title.tsv,qrels=/data2/jindawei/data/msmarco/rerank_doc/msmarco-doctrain-qrels.tsv,trec=/data2/jindawei/data/bids_marco-doc_ance-firstp-10_global.tsv \
         -max_input 40000000 \
-        -save ./checkpoints/gltr_global_n10_no_att \
-        -dev /data2/jindawei/data/dev_valid_1200_subset_from-splitidx-0.top100_n10.jsonl \
+        -save ./checkpoints/gltr_global_no_CE \
+        -dev /data2/jindawei/data/dev_valid_1200_subset_from-splitidx-0.top100.jsonl \
         -qrels /data2/jindawei/data/msmarco-docdev-qrels.tsv \
         -vocab bert-base-uncased \
         -pretrain bert-base-uncased \
-        -res ./results/gltr_global_n10_no_att.trec \
+        -res ./results/gltr_global_no_CE \
         -metric mrr_cut_100 \
         -max_query_len 64 \
         -max_doc_len 445 \
@@ -20,4 +20,4 @@ python train.py \
         -gradient_accumulation_steps 4 \
         -n_warmup_steps 2000 \
         -logging_step 100 \
-        -eval_every 10000
+        -eval_every 2500
