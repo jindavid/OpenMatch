@@ -1,21 +1,22 @@
-CUDA_VISIBLE_DEVICES=0 \
+CUDA_VISIBLE_DEVICES=3 \
 python train.py \
         -task global_cat \
         -model bert \
-        -train /data2/jindawei/data/msmarco_train_global_cat_top98_ANCE+BM25.json \
+        -train /data2/jindawei/data/msmarco_train_global_cat_top98_ANCE+BM25_10000.json \
         -max_input 40000000 \
-        -save ./checkpoints/gltr_global_yes_CE \
+        -save ./checkpoints/gltr_global_cat \
         -dev /data2/jindawei/data/dev_valid_1200_subset_from-splitidx-0.top100.jsonl \
         -qrels /data2/jindawei/data/msmarco-docdev-qrels.tsv \
         -vocab bert-base-uncased \
         -pretrain bert-base-uncased \
-        -res ./results/gltr_global_yes_CE.trec \
+        -res ./results/gltr_global_cat.trec \
         -metric mrr_cut_100 \
         -max_query_len 64 \
         -max_doc_len 445 \
         -epoch 1 \
         -optimizer adamw \
         -batch_size 1 \
+        -doc_size 5 \
         -lr 2e-5 \
         -gradient_accumulation_steps 4 \
         -n_warmup_steps 2000 \

@@ -1,6 +1,6 @@
-CUDA_VISIBLE_DEVICES=0 \
+CUDA_VISIBLE_DEVICES=7 \
 python train.py \
-        -task global -global_loss CE_loss \
+        -task global \
         -model bert \
         -train queries=/data2/jindawei/data/msmarco-doctrain-queries.tsv,docs=/data2/jindawei/data/msmarco-docs-firstP_title.tsv,qrels=/data2/jindawei/data/msmarco/rerank_doc/msmarco-doctrain-qrels.tsv,trec=/data2/jindawei/data/bids_marco-doc_ance-firstp-10_global.tsv \
         -max_input 40000000 \

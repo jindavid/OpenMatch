@@ -6,3 +6,4 @@ from OpenMatch.models.tk import TK
 from OpenMatch.models.edrm import EDRM
 from OpenMatch.models.bert_global import BertGlobal
 from OpenMatch.models.bert_global2 import BertGlobal2
+from OpenMatch.models.bert_global_cat import BertGlobalCat

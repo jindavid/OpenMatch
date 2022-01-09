@@ -35,39 +35,14 @@ class BertGlobal2(nn.Module):
 
     def forward(self, input_ids: torch.Tensor, input_mask: torch.Tensor = None, segment_ids: torch.Tensor = None) -> Tuple[torch.Tensor, torch.Tensor]:
 
-        s = 5
-
-        input_ids1 = input_ids[:,:s,:]
-        input_mask1 = input_mask[:,:s,:]
-        segment_ids1 = segment_ids[:,:s,:]
-
-        input_ids2 = input_ids[:,s:40,:]
-        input_mask2 = input_mask[:,s:40,:]
-        segment_ids2 = segment_ids[:,s:40,:]
-
-        ### rest 90
-        output2_cls, _ = self._model(input_ids2.squeeze(), attention_mask = input_mask2.squeeze(), token_type_ids = segment_ids2.squeeze()) #  90 * 768
-        output2_cls = output2_cls.detach()
-        logits2 = output2_cls[:, 0, :]
-
-        ### top 10
-        output1_cls, _ = self._model(input_ids1.squeeze(), attention_mask = input_mask1.squeeze(), token_type_ids = segment_ids1.squeeze()) #  10 * 768
-        logits1 = output1_cls[:, 0, :]
-
-        logits = torch.cat((logits1, logits2), dim=0)
-
-        # input_ids = input_ids[:,:s,:]
-        # input_mask = input_mask[:,:s,:]
-        # segment_ids = segment_ids[:,:s,:]
-
-        # output = self._model(input_ids = input_ids.squeeze(), attention_mask = input_mask.squeeze(), token_type_ids = segment_ids.squeeze())
+        output = self._model(input_ids = input_ids.squeeze(), attention_mask = input_mask.squeeze(), token_type_ids = segment_ids.squeeze())
     
-        # if self._mode == 'cls':
-        #     logits = output[0][:, 0, :] # 10 * 768
-        # elif self._mode == 'pooling':
-        #     logits = output[1]
-        # else:
-        #     raise ValueError('Mode must be `cls` or `pooling`.')
+        if self._mode == 'cls':
+            logits = output[0][:, 0, :] # 10 * 768
+        elif self._mode == 'pooling':
+            logits = output[1]
+        else:
+            raise ValueError('Mode must be `cls` or `pooling`.')
 
         print(logits)
 
