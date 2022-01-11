@@ -15,16 +15,26 @@ from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Tenso
 from utils import is_first_worker, DistributedEvalSampler, merge_resfile, set_dist_args, optimizer_to
 from contextlib import nullcontext # from contextlib import suppress as nullcontext # for python < 3.7
 torch.multiprocessing.set_sharing_strategy('file_system')
-import logging
+import logging, sys
+logging.disable(sys.maxsize)
+# logging.getLogger('imported_module').setLevel(logging.CRITICAL)
 import random
 import numpy as np
 logger = logging.getLogger(__name__)
 from torch.utils.tensorboard import SummaryWriter
 
-writer = SummaryWriter(log_dir='tb_logs/global_cat_trail2')
-
+writer = SummaryWriter(log_dir='tb_logs/global_cat_trail6')
 
 def dev(args, model, metric, dev_loader, device):
+    model = om.models.BertGlobalCat(
+            pretrained=args.pretrain,
+            cls_mode=args.cls_mode,
+            mode='dev',
+            task=args.task
+        )
+
+    model.to(device)
+
     rst_dict = {}
     for dev_batch in dev_loader:
         query_id, doc_id, label, retrieval_score = dev_batch['query_id'], dev_batch['doc_id'], dev_batch['label'], dev_batch['retrieval_score']
@@ -62,12 +72,12 @@ def inference(args, dataset, device):
 
     model = om.models.BertGlobalCat(
         pretrained=args.pretrain,
-        mode=args.mode,
-        task=args.task,
-        inf=True
+        mode='inf',
+        task=args.task
     )
 
     model.to(device)
+
     output_cls = []
     for inf_batch in inf_loader:
         with torch.no_grad():
@@ -118,6 +128,7 @@ def train(args, model, loss_fn, m_optim, m_scheduler, metric, train_loader, dev_
                 score_tensor = batch_score.repeat(len(batch_score), 1)
                 diff_tensor = score_tensor - score_tensor.t()
                 diff_score = diff_tensor[mask > 0]
+
                 batch_loss = loss_fn(torch.sigmoid(diff_score), torch.ones(diff_score.size()).to(device))
 
             if args.gradient_accumulation_steps > 1:
@@ -135,8 +146,9 @@ def train(args, model, loss_fn, m_optim, m_scheduler, metric, train_loader, dev_
                 global_step += 1
 
                 if args.logging_step > 0 and ((global_step+1) % args.logging_step == 0 or (args.test_init_log and global_step==0)):
-                    logger.info( "training gpu {}:,  global step: {}, local step: {}, loss: {}".format(-1,global_step+1, step+1, avg_loss/args.logging_step))
-                    writer.add_scalar('avg_loss',avg_loss/args.logging_step, step)
+                    logger.info( "training gpu {}:,  global step: {}, local step: {}, loss: {}".format(-1, global_step+1, step+1, avg_loss/args.logging_step))
+                    writer.add_scalar('avg_loss', avg_loss/args.logging_step, step)
+                    print("training gpu {}:,  global step: {}, local step: {}, loss: {}".format(-1, global_step+1, step+1, avg_loss/args.logging_step))
                         
                     avg_loss = 0.0
 
@@ -180,7 +192,7 @@ def main():
     parser.add_argument('-checkpoint', type=str, default=None)
     parser.add_argument('-res', type=str, default='./results/bert.trec')
     parser.add_argument('-metric', type=str, default='ndcg_cut_10')
-    parser.add_argument('-mode', type=str, default='cls')
+    parser.add_argument('-cls_mode', type=str, default='cls')
     parser.add_argument('-n_kernels', type=int, default=21)
     parser.add_argument('-max_query_len', type=int, default=20)
     parser.add_argument('-max_doc_len', type=int, default=150)
@@ -232,7 +244,7 @@ def main():
     train_loader = om.data.DataLoader(
         dataset=train_set,
         batch_size=args.batch_size,
-        shuffle=False, ## dj
+        shuffle=True, ## dj
         num_workers=8
     )
 
@@ -246,7 +258,7 @@ def main():
 
         model = om.models.BertGlobal2(
             pretrained=args.pretrain,
-            mode=args.mode,
+            cls_mode=args.cls_mode,
             task=args.task,
             batch_size=args.batch_size
         )
@@ -256,14 +268,14 @@ def main():
     elif args.task == 'global_cat':
         dev_loader = om.data.DataLoader(
             dataset=dev_set,
-            batch_size=args.batch_size,
+            batch_size=100,
             shuffle=False,
             num_workers=8
         )
 
         model = om.models.BertGlobalCat(
             pretrained=args.pretrain,
-            mode=args.mode,
+            cls_mode=args.cls_mode,
             task=args.task
         )
 
